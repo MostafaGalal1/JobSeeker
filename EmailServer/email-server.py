@@ -21,14 +21,19 @@ API_BACKEND_URL = os.getenv("API_BACKEND_URL")
 
 def send_email(to_email, subject, body):
     try:
-        # Combine the subject and body (RFC 5322 format)
-        message = f"Subject: {subject}\n\n{body}"
+        # Combine the subject and body (RFC 5322 format) with UTF-8 encoding
+        message = f"""From: {SENDER_EMAIL}
+To: {to_email}
+Subject: {subject}
+
+{body}
+        """
 
         server = SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
 
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, to_email, message)
+        server.sendmail(SENDER_EMAIL, to_email, message.encode('utf-8'))
 
     except Exception as e:
         print("Error in sending emails: " + e)
@@ -52,7 +57,7 @@ def fetch_and_send_emails():
 
         with ThreadPoolExecutor(max_workers=100) as executer:
             for email in emails:
-                executer.submit(send_email, email, subject, body)
+                executer.submit(send_email, email.get("email"), subject, body)
 
 
     except psycopg2.Error as e:
