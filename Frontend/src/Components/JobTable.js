@@ -39,7 +39,7 @@ export default function JobTable() {
   ];
 
   React.useEffect(() => {
-    fetch("https://alex.hosting.acm.org/JobSeeker/jobs")
+    fetch("http://localhost:5000/api/jobs")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Network response was not ok");
