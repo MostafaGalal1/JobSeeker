@@ -7,4 +7,7 @@ module.exports = {
   DB_NAME: process.env.DB_NAME,
   DB_PASSWORD: process.env.DB_PASSWORD,
   DB_PORT: process.env.DB_PORT,
+  MQ_HOST: process.env.MQ_HOST,
+  MQ_USER: process.env.MQ_USER,
+  MQ_PASSWORD: process.env.MQ_PASSWORD,
 };

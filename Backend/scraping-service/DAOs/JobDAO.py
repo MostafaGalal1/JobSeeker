@@ -29,7 +29,7 @@ class JobDAO:
             for job in jobs
         ]
 
-        response = requests.post(f"{self.BASE_URL}/bulk", json={"jobs": job_data})
+        response = requests.post(f"{self.BASE_URL}/bulk", json=job_data)
         
         if response.status_code == 201:
             print("Jobs inserted successfully")
