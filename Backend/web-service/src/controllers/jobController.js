@@ -1,37 +1,43 @@
 const { publishToQueue } = require("../config/mq");
 const pool = require("../config/db");
 const format = require("pg-format");
+const { SI_HOST, SI_PORT, SI_INDEX } = require("../config/env");
 
 const searchJobs = async (req, res) => {
   try {
-    const { query } = req.query;
+    const { keyword, location } = req.query;
 
     const esQuery = {
+      size: 100,
+      min_score: 2.0,
       query: {
         bool: {
           should: [
-            { match: { "jobs.job_title": query } },
-            { match: { "jobs.company_name": query } },
-            { match: { "jobs.job_type": query } },
-            { match: { "jobs.experience_years": query } },
-            { match: { "jobs.experience_level": query } },
-            { match: { "jobs.salary": query } },
-            { match: { "jobs.city": query } },
-            { match: { "jobs.country": query } }
+            { "wildcard": { "job.job_title": `*${keyword}*` } },
+            { "wildcard": { "job.company_name": `*${keyword}*` } },
+            { "wildcard": { "job.job_type": `*${keyword}*` } },
+            { "wildcard": { "job.experience_years": `*${keyword}*` } },
+            { "wildcard": { "job.experience_level": `*${keyword}*` } },
+            { "wildcard": { "job.salary": `*${keyword}*` } },
+            { "wildcard": { "job.city": `*${location}*` } },
+            { "wildcard": { "job.country": `*${location}*` } },
           ],
         },
       },
     };
 
-    const esResponse = await fetch("http://localhost:9200/jobs_index/_search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(esQuery),
-    });
+    const esResponse = await fetch(
+      `http://${SI_HOST}:${SI_PORT}/${SI_INDEX}/_search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(esQuery),
+      }
+    );
 
     const data = await esResponse.json();
-    const jobs = data.hits.hits.map((hit) => hit._source.jobs);
-
+    const jobs = data.hits.hits.map((hit) => hit._source.job);
+  
     res.json(jobs);
   } catch (error) {
     console.error("Error searching jobs:", error);
@@ -42,8 +48,16 @@ const searchJobs = async (req, res) => {
 const createJob = async (req, res) => {
   try {
     const {
-      job_id, job_title, company_name, job_type, experience_years,
-      experience_level, salary, city, country, job_url
+      job_id,
+      job_title,
+      company_name,
+      job_type,
+      experience_years,
+      experience_level,
+      salary,
+      city,
+      country,
+      job_url,
     } = req.body;
 
     const query = `
@@ -52,9 +66,20 @@ const createJob = async (req, res) => {
       RETURNING *;
     `;
 
-    const values = [job_id, job_title, company_name, job_type, experience_years, experience_level, salary, city, country, job_url];
+    const values = [
+      job_id,
+      job_title,
+      company_name,
+      job_type,
+      experience_years,
+      experience_level,
+      salary,
+      city,
+      country,
+      job_url,
+    ];
     const result = await pool.query(query, values);
-    
+
     await publishToQueue({ action: "create", job: result.rows[0] });
 
     res.status(201).json(result.rows[0]);
@@ -69,7 +94,9 @@ const createJobs = async (req, res) => {
     const jobs = req.body;
 
     if (!Array.isArray(jobs)) {
-      return res.status(400).json({ error: "Invalid input: Expected a non-empty array of jobs" });
+      return res
+        .status(400)
+        .json({ error: "Invalid input: Expected a non-empty array of jobs" });
     }
 
     const query = format(
@@ -78,15 +105,26 @@ const createJobs = async (req, res) => {
       VALUES %L
       RETURNING *;
       `,
-      jobs.map(job => [
-        job.job_id, job.job_title, job.company_name, job.job_type,
-        job.experience_years, job.experience_level, job.salary,
-        job.city, job.country, job.job_url
+      jobs.map((job) => [
+        job.job_id,
+        job.job_title,
+        job.company_name,
+        job.job_type,
+        job.experience_years,
+        job.experience_level,
+        job.salary,
+        job.city,
+        job.country,
+        job.job_url,
       ])
     );
     const result = await pool.query(query);
 
-    await Promise.all(result.rows.map(job => publishToQueue({ action: "create", job })));
+    await Promise.all(
+      result.rows.map((job) =>
+        publishToQueue({ action: "create", job }, { persistent: true })
+      )
+    );
 
     res.status(201).json(result.rows);
   } catch (error) {
@@ -100,8 +138,15 @@ const updateJob = async (req, res) => {
     const { id } = req.params;
 
     const {
-      job_title, company_name, job_type, experience_years, experience_level,
-      salary, city, country, job_url
+      job_title,
+      company_name,
+      job_type,
+      experience_years,
+      experience_level,
+      salary,
+      city,
+      country,
+      job_url,
     } = req.body;
 
     const query = `
@@ -112,9 +157,20 @@ const updateJob = async (req, res) => {
       RETURNING *;
     `;
 
-    const values = [job_title, company_name, job_type, experience_years, experience_level, salary, city, country, job_url, id];
+    const values = [
+      job_title,
+      company_name,
+      job_type,
+      experience_years,
+      experience_level,
+      salary,
+      city,
+      country,
+      job_url,
+      id,
+    ];
     const result = await pool.query(query, values);
-    
+
     await publishToQueue({ action: "update", job: result.rows[0] });
 
     res.json(result.rows[0]);
@@ -144,7 +200,7 @@ const getJobById = async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
-}
+};
 
 const deleteJob = async (req, res) => {
   try {
@@ -156,6 +212,14 @@ const deleteJob = async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
   }
-}
+};
 
-module.exports = { searchJobs, createJob, createJobs, updateJob, getAllJobs, getJobById, deleteJob };
+module.exports = {
+  searchJobs,
+  createJob,
+  createJobs,
+  updateJob,
+  getAllJobs,
+  getJobById,
+  deleteJob,
+};

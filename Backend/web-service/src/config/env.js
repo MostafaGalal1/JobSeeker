@@ -10,4 +10,7 @@ module.exports = {
   MQ_HOST: process.env.MQ_HOST,
   MQ_USER: process.env.MQ_USER,
   MQ_PASSWORD: process.env.MQ_PASSWORD,
+  SI_HOST: process.env.SI_HOST,
+  SI_PORT: process.env.SI_PORT,
+  SI_INDEX: process.env.SI_INDEX,
 };
