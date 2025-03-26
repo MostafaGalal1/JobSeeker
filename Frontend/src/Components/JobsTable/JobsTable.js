@@ -3,7 +3,7 @@ import { DataGrid } from "@mui/x-data-grid";
 import Paper from "@mui/material/Paper";
 import { useTheme } from "@mui/material/styles";
 
-export default function JobTable() {
+const JobsTable = () => {
   const [jobs, setJobs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const theme = useTheme();
@@ -28,7 +28,7 @@ export default function JobTable() {
           target="_blank"
           rel="noopener noreferrer"
           style={{ 
-            color: theme.palette.mode === 'dark' ? "#489de0" : "#1976d2", 
+            color: theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.main, 
             textDecoration: "underline" 
           }}
         >
@@ -92,3 +92,5 @@ export default function JobTable() {
     </Paper>
   );
 }
+
+export default JobsTable;

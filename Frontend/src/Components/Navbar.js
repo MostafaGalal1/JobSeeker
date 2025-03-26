@@ -14,12 +14,20 @@ import { Brightness4, Brightness7 } from "@mui/icons-material";
 import lightLogo from "../Assets/Logos/logo-light.png";
 import darkLogo from "../Assets/Logos/logo-dark.png";
 import { useThemeContext } from "../context/ThemeContext";
+import { useTheme } from "@mui/material/styles";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  UserButton,
+} from "@clerk/clerk-react";
 
-const pages = ["Home", "About", "Contact"];
+const pages = ["Home", "About"];
 
-export default function Navbar() {
+const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { darkMode, toggleDarkMode } = useThemeContext();
+  const theme = useTheme();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -54,17 +62,38 @@ export default function Navbar() {
             <Button
               key={page}
               sx={{
-                color: darkMode ? "#489de0" : "inherit",
+                color: darkMode ? theme.palette.primary.dark : "inherit",
               }}
             >
               {page}
             </Button>
           ))}
+          <SignedOut>
+            <SignInButton mode="modal">
+              <Button
+                color="primary"
+                sx={{
+                  color: darkMode ? theme.palette.primary.dark : "inherit",
+                  fontSize: "16px",
+                  textTransform: "none",
+                  borderRadius: "8px",
+                }}
+              >
+                Sign In
+              </Button>
+            </SignInButton>
+          </SignedOut>
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
         </Box>
 
         {/* Dark Mode Toggle */}
         <IconButton
-          sx={{ ml: 1, color: darkMode ? "#489de0" : "inherit" }}
+          sx={{
+            ml: 1,
+            color: darkMode ? theme.palette.primary.dark : "inherit",
+          }}
           onClick={toggleDarkMode}
         >
           {darkMode ? <Brightness7 /> : <Brightness4 />}
@@ -72,7 +101,14 @@ export default function Navbar() {
       </Toolbar>
 
       {/* Mobile Drawer */}
-      <Drawer anchor="left" open={mobileOpen} onClose={handleDrawerToggle}>
+      <Drawer
+        anchor="left"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        sx={{
+          color: darkMode ? theme.palette.primary.dark : "inherit",
+        }}
+      >
         <List>
           {pages.map((page) => (
             <ListItem key={page} disablePadding>
@@ -86,3 +122,5 @@ export default function Navbar() {
     </AppBar>
   );
 }
+
+export default Navbar;

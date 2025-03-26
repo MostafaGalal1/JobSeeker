@@ -25,9 +25,14 @@ export const ThemeProvider = ({ children }) => {
       createTheme({
         palette: {
           mode: darkMode ? 'dark' : 'light',
-          custom: {
-            main: '#1671ba'
-          }
+          background: {
+            default: darkMode ? '#303030' : '#f5f5f5',
+          },
+          primary: {
+            main: '#1976d2',
+            dark: '#489de0',
+            contrastText: '#fff',
+          },
         },
       }),
     [darkMode]
