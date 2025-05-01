@@ -1,6 +1,8 @@
 import json
 from abc import ABC
 
+from bs4 import BeautifulSoup
+
 from Scrapers.BaseScraper import BaseScraper
 from DAOs.Job import Job
 
@@ -32,8 +34,12 @@ class AmazonScraper(BaseScraper, ABC):
             country = self.country_mapping.get(country_code)
             job_url = f"https://www.amazon.jobs{job_card.get('job_path', '')}"
 
+            description_html = job_card.get("basic_qualifications")
+            soup = BeautifulSoup(description_html, "html.parser")
+            description = soup.get_text()
+
             job = Job(job_title=job_title, company_name=company_name, job_type=job_type, city=city,
-                      country=country, job_url=job_url)
+                      country=country, job_url=job_url, job_description=description)
             jobs.append(job)
 
         return jobs

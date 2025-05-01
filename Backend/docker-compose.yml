@@ -1,31 +1,59 @@
 services:
-  web-service:
-    build: ./web-service
+  users-service:
+    build: ./users-service
     env_file:
-      - ./web-service/.env
-    ports:
-      - "5000:5000"
+      - ./users-service/.env
     volumes:
-      - ./web-service:/app
+      - ./users-service:/app
       - /app/node_modules
     command: ["node", "server.js"]
     depends_on:
-      database-service:
+      # users-db:
+      #   condition: service_healthy
+      messaging-queue-service:
+        condition: service_healthy
+    networks:
+      - backend-network
+
+  jobs-service:
+    build: ./jobs-service
+    env_file:
+      - ./jobs-service/.env
+    volumes:
+      - ./jobs-service:/app
+      - /app/node_modules
+    command: ["node", "server.js"]
+    depends_on:
+      jobs-db:
         condition: service_healthy
       messaging-queue-service:
         condition: service_healthy
     networks:
       - backend-network
 
-  database-service:
+  resumes-service:
+    build: ./resumes-service
+    env_file:
+      - ./resumes-service/.env
+    volumes:
+      - ./resumes-service:/app
+      - /app/node_modules
+    command: ["node", "server.js"]
+    depends_on:
+      messaging-queue-service:
+        condition: service_healthy
+    networks:
+      - backend-network
+
+  jobs-db:
     image: "postgres:latest"
     env_file:
-      - ./database-service/.env
+      - ./jobs-db/.env
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database-service/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./jobs-db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -56,7 +84,7 @@ services:
     volumes:
       - ./scraping-service:/app
     depends_on:
-      database-service:
+      jobs-db:
         condition: service_healthy
       messaging-queue-service:
         condition: service_healthy
@@ -102,7 +130,8 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -139,6 +168,19 @@ services:
         condition: service_healthy
       messaging-queue-service:
         condition: service_healthy
+    networks:
+      - backend-network
+
+  reverse-proxy:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./reverse-proxy/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - users-service
+      - jobs-service
+      - resumes-service
     networks:
       - backend-network
 

@@ -1,6 +1,8 @@
 from abc import ABC
 from os import environ
 
+from bs4 import BeautifulSoup
+
 from Scrapers.BaseScraper import BaseScraper
 from DAOs.Job import Job
 
@@ -84,8 +86,12 @@ class WuzzufScraper(BaseScraper, ABC):
             salary = f"{salary_min}-{salary_max} EGP" if salary_min is not None and salary_max is not None else "Salary not provided"
             job_url = f"https://wuzzuf.net/jobs/p/{job_card.get('id', '')}"
 
+            description_html = attributes.get("description")
+            soup = BeautifulSoup(description_html, "html.parser")
+            description = soup.get_text()
+
             job = Job(job_title=job_title, company_name=company_name, job_type=job_type, experience_years=experience_years,
-                      experience_level=experience_level, salary=salary, city=city, country=country, job_url=job_url)
+                      experience_level=experience_level, salary=salary, city=city, country=country, job_url=job_url, job_description=description)
             jobs.append(job)
 
         return jobs

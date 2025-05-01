@@ -1,6 +1,8 @@
 import json
 from abc import ABC
 
+from bs4 import BeautifulSoup
+
 from Scrapers.BaseScraper import BaseScraper
 from DAOs.Job import Job
 
@@ -40,9 +42,13 @@ class GoogleScraper(BaseScraper, ABC):
             country_code = job_card["locations"][0].get("country_code")
             country = self.country_mapping.get(country_code)
             job_url = job_card.get("apply_url", "Unknown URL")
+            
+            description_html = job_card.get("description")
+            soup = BeautifulSoup(description_html, "html.parser")
+            description = soup.get_text()
 
             job = Job(job_title=job_title, company_name=company_name, experience_level=experience_level,
-                      city=city, country=country, job_url=job_url)
+                      city=city, country=country, job_url=job_url, job_description=description)
             jobs.append(job)
 
         return jobs

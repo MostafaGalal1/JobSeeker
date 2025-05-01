@@ -1,37 +1,63 @@
+import os
+import pika
+import redis
+import dotenv
+import json
+
 from Scrapers.AmazonScraper import AmazonScraper
 from Scrapers.GoogleScraper import GoogleScraper
 from Scrapers.LinkedInScraper import LinkedInScraper
 from Scrapers.MetaScraper import MetaScraper
 from Scrapers.WuzzufScraper import WuzzufScraper
-from DAOs.JobDAO import JobDAO
-
-
-def fetch_jobs(scrapers, job_dao, job_set):
-    unseen_jobs = []
-    print("Fetching jobs...")
-
-    for scraper in scrapers:
-        jobs = scraper.scrape_jobs()
-        for job in jobs:
-            job_id = job.job_id
-
-            # Avoid duplicates
-            if job_id not in job_set:
-                job_set.add(job_id)
-                unseen_jobs.append(job)
-
-    if len(unseen_jobs) > 0:
-        job_dao.insert_jobs(unseen_jobs)
-    print(f"Inserted {len(unseen_jobs)} new jobs into the database")
 
 
 class JobScraper:
     def __init__(self):
-        job_dao = JobDAO()
-        job_set = job_dao.get_jobs_hashes()
+        dotenv.load_dotenv()
+        RABBITMQ_USER = os.getenv("RABBITMQ_USER")
+        RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
+        RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
+        RABBITMQ_PORT = os.getenv("RABBITMQ_PORT")
 
-        scrapers = [WuzzufScraper(), MetaScraper(), AmazonScraper(), GoogleScraper(), LinkedInScraper()]
-        fetch_jobs(scrapers, job_dao, job_set)
+        self.redis = redis.Redis(host='redis-service', port=6379, db=0)
+
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(RABBITMQ_HOST, RABBITMQ_PORT, credentials=pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+                                      ))
+        self.channel = connection.channel()
+        self.channel.queue_declare(queue='jobs_queue', durable=True)
+
+        self.scrapers = [MetaScraper(), AmazonScraper(),
+                         GoogleScraper(), LinkedInScraper()]
+        self.fetch_jobs()
+
+        connection.close()
+
+    def fetch_jobs(self):
+        unseen_jobs = []
+        print("Fetching jobs...")
+
+        for scraper in self.scrapers:
+            jobs = scraper.scrape_jobs()
+            for job in jobs:
+                job_id = job.job_id
+
+                if not self.redis.sismember("jobs_ids_cache", job_id):
+                    unseen_jobs.append(job)
+
+        for job in unseen_jobs:
+            job_message = json.dumps(job.__dict__)
+            self.channel.basic_publish(
+                routing_key='jobs_queue',
+                exchange='',
+                body=job_message,
+                properties=pika.BasicProperties(
+                    delivery_mode=2
+                )
+            )
+            self.redis.sadd("job_ids_cache", job_id)
+
+        print(f"Inserted {len(unseen_jobs)} new jobs into the database")
 
 
 if __name__ == "__main__":

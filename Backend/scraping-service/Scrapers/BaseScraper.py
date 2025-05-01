@@ -14,6 +14,7 @@ class BaseScraper(ABC):
         # Scrape
         scrape_url = self.get_scrape_url()
         jobs = self.parse_jobs(scrape_url)
+        print(f"Scraped {len(jobs)} jobs from {self.name}", jobs[0])
         return jobs
 
         # Save

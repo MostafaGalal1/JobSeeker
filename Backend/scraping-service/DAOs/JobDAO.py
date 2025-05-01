@@ -1,7 +1,7 @@
 import requests
 
 class JobDAO:
-    BASE_URL = "http://web-service:5000/api/jobs"
+    BASE_URL = "http://jobs-service:5000/api/jobs"
 
     def __init__(self):
         pass
