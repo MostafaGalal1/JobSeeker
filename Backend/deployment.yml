@@ -1,0 +1,1047 @@
+---
+# ConfigMaps
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jobs-db-config
+data:
+  POSTGRES_DB: job-seeker-db
+  POSTGRES_PASSWORD: E+w85x4^D{gz,f}&dhARGFv:tm*P~)<_a!ry/.[NW?BY
+  POSTGRES_USER: job-seeker-admin
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jobs-service-config
+data:
+  DB_HOST: jobs-db
+  DB_NAME: job-seeker-db
+  DB_PASSWORD: E+w85x4^D{gz,f}&dhARGFv:tm*P~)<_a!ry/.[NW?BY
+  DB_PORT: "5432"
+  DB_USER: job-seeker-admin
+  HCP_CLIENT_ID: t6lU13BQAJfbMfheaY33IjCdIEFMPlDr
+  HCP_CLIENT_SECRET: -DoEmY_IhrU8hsW3Qz2h90h07EBJdrN90Et53WVj9i6MatYxUYuQo22YEXqJSYpm
+  MQ_HOST: messaging-queue-service
+  MQ_PORT: "5672"
+  PORT: "5000"
+  SI_HOST: search-index-service
+  SI_INDEX: jobs_index
+  SI_PORT: "9200"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-index-config
+data:
+  ES_HOST: search-index-service
+  ES_INDEX: jobs_index
+  ES_PORT: "9200"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: messaging-queue-config
+data:
+  RABBITMQ_DEFAULT_PASS: yL6QteLhHHN8BausRIDxv2XzWOG2XHA76JBuLnSYsg1D
+  RABBITMQ_DEFAULT_USER: job-seeker-admin
+  RABBITMQ_HOST: messaging-queue-service
+  RABBITMQ_PASSWORD: yL6QteLhHHN8BausRIDxv2XzWOG2XHA76JBuLnSYsg1D
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_QUEUE: jobs_queue
+  RABBITMQ_USER: job-seeker-admin
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resumes-service-config
+data:
+  HCP_CLIENT_ID: t6lU13BQAJfbMfheaY33IjCdIEFMPlDr
+  HCP_CLIENT_SECRET: -DoEmY_IhrU8hsW3Qz2h90h07EBJdrN90Et53WVj9i6MatYxUYuQo22YEXqJSYpm
+  MQ_HOST: messaging-queue-service
+  MQ_PORT: "5672"
+  PORT: "5000"
+  SI_HOST: search-index-service
+  SI_INDEX: jobs_index
+  SI_PORT: "9200"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: users-service-config
+data:
+  DB_HOST: users-db
+  DB_PORT: "5432"
+  HCP_CLIENT_ID: t6lU13BQAJfbMfheaY33IjCdIEFMPlDr
+  HCP_CLIENT_SECRET: -DoEmY_IhrU8hsW3Qz2h90h07EBJdrN90Et53WVj9i6MatYxUYuQo22YEXqJSYpm
+  MQ_HOST: messaging-queue-service
+  MQ_PORT: "5672"
+  PORT: "5000"
+  SI_HOST: search-index-service
+  SI_INDEX: jobs_index
+  SI_PORT: "9200"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+data:
+  01-input.conf: |
+    input {
+      rabbitmq {
+        host => "${RABBITMQ_HOST}"
+        port => "${RABBITMQ_PORT}"
+        vhost => "${RABBITMQ_VHOST:/}"
+        user => "${RABBITMQ_USER}"
+        password => "${RABBITMQ_PASSWORD}"
+        queue => "persistant_jobs_queue"
+        durable => true
+        exchange => "jobs_exchange"
+        exchange_type => "fanout"           
+        key => ""
+      }
+    }
+
+    filter {
+      json {
+        source => "message"
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["http://${ES_HOST}:${ES_PORT}"]
+        index => "${ES_INDEX}"
+      }
+
+      stdout { codec => rubydebug }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reverse-proxy-config
+data:
+  nginx.conf: |
+    events {}
+
+    http {
+        upstream jobs_service {
+            server jobs-service:5000;
+        }
+
+        upstream users_service {
+            server users-service:5000;
+        }
+
+        upstream resumes_service {
+            server resumes-service:5000;
+        }
+
+        server {
+            listen 80;
+
+            location /users/docs/ {
+                proxy_pass http://users_service/api-docs/;
+            }
+
+            location /jobs/docs/ {
+                proxy_pass http://jobs_service/api-docs/;
+            }
+
+            location /resumes/docs/ {
+                proxy_pass http://resumes_service/api-docs/;
+            }
+
+            location /users/ {
+                rewrite ^/users/(.*)$ /api/users/$1 break;
+                proxy_pass http://users_service/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            location /jobs/ {
+                rewrite ^/jobs/(.*)$ /api/jobs/$1 break;
+                proxy_pass http://jobs_service/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            location /resumes/ {
+                rewrite ^/resumes/(.*)$ /api/resumes/$1 break;
+                proxy_pass http://resumes_service/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+    }
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jobs-db-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scraping-service-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobs-db
+  labels:
+    app: jobs-db
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: jobs-db
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  labels:
+    app: logstash
+spec:
+  ports:
+    - port: 5044
+      targetPort: 5044
+      name: logstash
+    - port: 9600
+      targetPort: 9600
+      name: monitoring
+  selector:
+    app: logstash
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: messaging-queue-service
+  labels:
+    app: messaging-queue
+spec:
+  ports:
+    - port: 5672
+      targetPort: 5672
+      name: amqp
+    - port: 15672
+      targetPort: 15672
+      name: management
+  selector:
+    app: messaging-queue
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reverse-proxy
+  labels:
+    app: reverse-proxy
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app: reverse-proxy
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-index-service
+  labels:
+    app: elasticsearch
+spec:
+  ports:
+    - port: 9200
+      targetPort: 9200
+      name: rest
+  selector:
+    app: elasticsearch
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-index-ui-service
+  labels:
+    app: kibana
+spec:
+  ports:
+    - port: 5601
+      targetPort: 5601
+      name: kibana
+  selector:
+    app: kibana
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-service
+  labels:
+    app: users-service
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http
+  selector:
+    app: users-service
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobs-service
+  labels:
+    app: jobs-service
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http
+  selector:
+    app: jobs-service
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resumes-service
+  labels:
+    app: resumes-service
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http
+  selector:
+    app: resumes-service
+
+---
+# Deployments
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs-db
+  labels:
+    app: jobs-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jobs-db
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: jobs-db
+    spec:
+      containers:
+        - name: jobs-db
+          image: postgres:latest
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-db-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-db-config
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-db-config
+                  key: POSTGRES_USER
+          ports:
+            - containerPort: 5432
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
+            failureThreshold: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-data
+            - mountPath: /docker-entrypoint-initdb.d/init.sql
+              name: init-script
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+        - name: init-script
+          persistentVolumeClaim:
+            claimName: jobs-db-claim
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs-service
+  labels:
+    app: jobs-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jobs-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: jobs-service
+    spec:
+      containers:
+        - name: backend-jobs-service
+          image: backend-jobs-service:latest
+          imagePullPolicy: Never
+          args:
+            - node
+            - server.js
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: DB_NAME
+            - name: DB_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: DB_PASSWORD
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: DB_USER
+            - name: HCP_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: HCP_CLIENT_ID
+            - name: HCP_CLIENT_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: HCP_CLIENT_SECRET
+            - name: MQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: MQ_HOST
+            - name: MQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: MQ_PORT
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: PORT
+            - name: SI_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: SI_HOST
+            - name: SI_INDEX
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: SI_INDEX
+            - name: SI_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jobs-service-config
+                  key: SI_PORT
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.6.0
+          env:
+            - name: ES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: search-index-config
+                  key: ES_HOST
+            - name: ES_INDEX
+              valueFrom:
+                configMapKeyRef:
+                  name: search-index-config
+                  key: ES_INDEX
+            - name: ES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: search-index-config
+                  key: ES_PORT
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_HOST
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_PASSWORD
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_PORT
+            - name: RABBITMQ_QUEUE
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_QUEUE
+            - name: RABBITMQ_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_USER
+            - name: XPACK_MONITORING_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 5044
+            - containerPort: 9600
+          volumeMounts:
+            - mountPath: /usr/share/logstash/pipeline
+              name: logstash-config-file
+      volumes:
+        - name: logstash-config-file
+          configMap:
+            name: logstash-config
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging-queue-service
+  labels:
+    app: messaging-queue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: messaging-queue
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: messaging-queue
+    spec:
+      containers:
+        - name: messaging-queue-service
+          image: rabbitmq:management
+          env:
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_HOST
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_PASSWORD
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_PORT
+            - name: RABBITMQ_QUEUE
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_QUEUE
+            - name: RABBITMQ_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: messaging-queue-config
+                  key: RABBITMQ_USER
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
+          livenessProbe:
+            exec:
+              command:
+                - rabbitmqctl
+                - status
+            failureThreshold: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - mountPath: /var/lib/rabbitmq
+              name: rabbitmq-data-volume
+      volumes:
+        - name: rabbitmq-data-volume
+          persistentVolumeClaim:
+            claimName: rabbitmq-data
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis-service
+          image: redis:latest
+          ports:
+            - containerPort: 6379
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            failureThreshold: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resumes-service
+  labels:
+    app: resumes-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resumes-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: resumes-service
+    spec:
+      containers:
+        - name: backend-resumes-service
+          image: backend-resumes-service:latest
+          imagePullPolicy: Never
+          args:
+            - node
+            - server.js
+          env:
+            - name: HCP_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: HCP_CLIENT_ID
+            - name: HCP_CLIENT_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: HCP_CLIENT_SECRET
+            - name: MQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: MQ_HOST
+            - name: MQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: MQ_PORT
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: PORT
+            - name: SI_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: SI_HOST
+            - name: SI_INDEX
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: SI_INDEX
+            - name: SI_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: resumes-service-config
+                  key: SI_PORT
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reverse-proxy
+  labels:
+    app: reverse-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reverse-proxy
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: reverse-proxy
+    spec:
+      containers:
+        - name: reverse-proxy
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - mountPath: /etc/nginx/nginx.conf
+              name: nginx-config
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: reverse-proxy-config
+            items:
+            - key: nginx.conf
+              path: nginx.conf
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scraping-service
+  labels:
+    app: scraping-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scraping-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: scraping-service
+    spec:
+      containers:
+        - name: backend-scraping-service
+          image: backend-scraping-service:latest
+          imagePullPolicy: Never
+          volumeMounts:
+            - mountPath: /app
+              name: app-code
+      volumes:
+        - name: app-code
+          persistentVolumeClaim:
+            claimName: scraping-service-app
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-index-service
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: search-index-service
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+          env:
+            - name: ES_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+          ports:
+            - containerPort: 9200
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - curl -f http://localhost:9200/_cluster/health || exit 1
+            failureThreshold: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - mountPath: /usr/share/elasticsearch/data
+              name: es-data
+      volumes:
+        - name: es-data
+          persistentVolumeClaim:
+            claimName: elasticsearch-data
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-index-ui-service
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+        - name: search-index-ui-service
+          image: docker.elastic.co/kibana/kibana:8.6.0
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: http://search-index-service:9200
+          ports:
+            - containerPort: 5601
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-service
+  labels:
+    app: users-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: users-service
+    spec:
+      containers:
+        - name: backend-users-service
+          image: backend-users-service:latest
+          imagePullPolicy: Never
+          args:
+            - node
+            - server.js
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: DB_PORT
+            - name: HCP_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: HCP_CLIENT_ID
+            - name: HCP_CLIENT_SECRET
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: HCP_CLIENT_SECRET
+            - name: MQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: MQ_HOST
+            - name: MQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: MQ_PORT
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: PORT
+            - name: SI_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: SI_HOST
+            - name: SI_INDEX
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: SI_INDEX
+            - name: SI_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: users-service-config
+                  key: SI_PORT
