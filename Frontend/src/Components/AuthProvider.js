@@ -3,8 +3,7 @@ import { dark } from "@clerk/themes";
 import { useTheme } from "@mui/material/styles";
 
 const AuthProvider = ({ children }) => {
-  const PUBLISHABLE_KEY =
-    "pk_test_Z29sZGVuLWR1Y2stMC5jbGVyay5hY2NvdW50cy5kZXYk";
+  const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
 
   if (!PUBLISHABLE_KEY) {
     throw new Error("Missing Publishable Key");

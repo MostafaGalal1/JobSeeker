@@ -1,14 +1,12 @@
 import React, { useState } from "react";
 import JobsSearchBarPresentation from "./JobsSearchBarPresentation";
-import useJobsSearch from "../../hooks/useJobsSearch";
 
-const JobsSearchBar = () => {
-  const { searchJobs } = useJobsSearch();
+const JobsSearchBar = ({ onSearch }) => {
   const [keyword, setKeyword] = useState("");
   const [location, setLocation] = useState("");
 
   const handleSearch = () => {
-    searchJobs(keyword, location);
+    onSearch(keyword, location);
   };
 
   return (

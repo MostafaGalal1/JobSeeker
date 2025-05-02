@@ -1,30 +1,34 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 const useJobsSearch = () => {
-  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const searchJobs = async (keyword, location) => {
+  const searchJobs = useCallback(async (keyword, location, setJobs) => {
     setLoading(true);
     setError(null);
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/jobs/search?keyword=${keyword}&location=${location}`
+        `${process.env.REACT_APP_BACKEND_URL}/jobs/search?keyword=${keyword}&location=${location}`
       );
       if (!response.ok) throw new Error("Failed to fetch jobs");
 
       const data = await response.json();
-      setJobs(data);
+      const jobs = data.map((job, index) => ({ 
+        id: index + 1, 
+        ...job 
+      }));
+
+      setJobs(jobs);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  return { jobs, searchJobs, loading, error };
+  return { searchJobs, loading, error };
 };
 
 export default useJobsSearch;

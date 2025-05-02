@@ -1,12 +1,10 @@
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { DataGrid } from "@mui/x-data-grid";
 import Paper from "@mui/material/Paper";
 import { useTheme } from "@mui/material/styles";
 
-const JobsTablePresentation = () => {
-  const jobs = useState([]);
-  const loading = useState(true);
+const JobsTablePresentation = ({ jobs, loading }) => {
   const theme = useTheme();
   
   const columns = useMemo(() => [

@@ -25,6 +25,8 @@
     "node-vault": "^0.10.2",
     "pdf-parse": "^1.1.1",
     "pg": "^8.14.1",
-    "pg-format": "^1.0.4"
+    "pg-format": "^1.0.4",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }
